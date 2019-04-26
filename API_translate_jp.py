@@ -43,13 +43,18 @@ def translate(sentence):
     else:
         print('cannot get the page')
         return
+    try:
+        if page_json['trans_result']:
+            translate_result = page_json['trans_result']
+            translate_text = translate_result[0]['dst']
+            return translate_text
+        else:
+            translate_text = '分からないです'
+            return translate_text
 
-    if page_json['trans_result']:
-        translate_result = page_json['trans_result']
-        translate_text = translate_result[0]['dst']
-        print(translate_text)
+    except Exception as e:
+        print('error',e)
 
-        return translate_text
 
 
 def translate_by_line(file_name, output_file):
@@ -65,5 +70,8 @@ def translate_by_line(file_name, output_file):
 
 
 if __name__ == "__main__":
-    #translate_by_line(output_question_file,jp_question_file)
-    translate_by_line(output_answer_file,jp_answer_file)
+    try:
+        #translate_by_line(output_question_file,jp_question_file)
+        translate_by_line(output_answer_file,jp_answer_file)
+    except Exception as e:
+        print(e)
