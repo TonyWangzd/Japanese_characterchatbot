@@ -11,6 +11,13 @@ output_seq_len = 5
 PAD_ID = 0
 # 输出序列起始标记
 GO_ID = 1
+# 神经元数
+size = 8
+#max input symbols
+num_encoder_symbols = 10
+#max output symbols
+num_decoder_symbols = 16
+
 
 def get_samples():
 
@@ -31,32 +38,40 @@ def get_samples():
     # therefore
     encoder_inputs = []
     decoder_inputs = []
-
+    target_weights = []
     for length_idx in range(input_seq_len):
         encoder_inputs.append(np.array([encoder_input_0[length_idx], encoder_input_1[length_idx]], dtype=np.int32))
 
     for length_idx in range(output_seq_len):
         decoder_inputs.append(np.array([decoder_input_0[length_idx], decoder_input_1[length_idx]], dtype=np.int32))
+        target_weights.append(np.array([
 
-    return encoder_inputs, decoder_inputs
+            0.0 if length_idx == output_seq_len - 1
+                        or decoder_input_0[length_idx] == PAD_ID else 1.0,
+
+            0.0 if length_idx == output_seq_len - 1
+                   or decoder_input_1[length_idx] == PAD_ID else 1.0,
+        ], dtype=np.float32))
+    return encoder_inputs, decoder_inputs, target_weights
 
 def get_model():
     encoder_inputs = []
     decoder_inputs = []
+    target_weights = []
 
     for i in range(input_seq_len):
         encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                              name = 'encoder{0}'.format(i)))
-    for i in range(output_seq_len):
+    for i in range(output_seq_len + 1):
         decoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                               name = 'decoder{0}'.format(i)))
+    for i in range(output_seq_len):
+        target_weights.append(tf.placeholder(tf.float32, shape=[None],
+                                              name = 'weight{0}'.format(i)))
 
-    size = 8
-
+    targets = [decoder_inputs[i + 1] for i in range(output_seq_len)]
     cell_fun = tf.contrib.rnn.BasicLSTMCell
     cell = cell_fun(size)
-    num_encoder_symbols = 10
-    num_decoder_symbols = 16
 
     outputs, _ = seq2seq.embedding_attention_seq2seq(
         encoder_inputs,
@@ -69,23 +84,32 @@ def get_model():
         feed_previous=False,
         dtype=tf.float32
     )
-    return encoder_inputs, decoder_inputs, outputs
+    #calculate the loss
+    loss = seq2seq.sequence_loss(outputs, targets, target_weights)
+
+    return encoder_inputs, decoder_inputs, target_weights, outputs, loss
 
 
 def run_model():
     with tf.Session() as sess:
-        sample_encoder_inputs, sample_decoder_inputs = get_samples()
-        encoder_inputs, decoder_inputs, outputs = get_model()
+        sample_encoder_inputs, sample_decoder_inputs, sample_target_weights = get_samples()
+        encoder_inputs, decoder_inputs, target_weights, outputs, loss = get_model()
+
         input_feed = {}
         for l in range(input_seq_len):
             input_feed[encoder_inputs[l].name] = sample_encoder_inputs[l]
         for l in range(output_seq_len):
             input_feed[decoder_inputs[l].name] = sample_decoder_inputs[l]
+            input_feed[target_weights[l].name] = sample_target_weights[l]
+
+        input_feed[decoder_inputs[output_seq_len].name] = np.zeros([2], dtype=np.int32)
 
         sess.run(tf.global_variables_initializer())
-        outputs = sess.run(outputs,input_feed)
-        print(outputs)
-
+        #outputs = sess.run(outputs,input_feed)
+        #print(outputs)
+        sess.run(tf.global_variables_initializer())
+        loss = sess.run(loss, input_feed)
+        print(loss)
 
 if __name__ == "__main__":
     run_model()
