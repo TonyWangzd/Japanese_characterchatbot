@@ -6,7 +6,17 @@ import tensorflow as tf
 from tensorflow.contrib.legacy_seq2seq.python.ops import seq2seq
 import jieba
 import random
+import JuliusProxy
 
+import requests
+import hashlib
+import random
+import json
+import pandas as pd
+import re
+import logging
+
+DEBUG = 1
 
 # 输入序列长度
 input_seq_len = 5
@@ -24,7 +34,7 @@ size = 8
 #learninng rate
 init_learning_rate = 1
 #minus frequncy
-min_freq = 10
+min_freq = 3
 
 wordToken = word_token.WordToken()
 
@@ -35,6 +45,88 @@ num_encoder_symbols = max_token_id + 5
 num_decoder_symbols = max_token_id + 5
 ###########################################
 
+#translate part
+en_sentence = 'I am back.'
+key = '99sRkrxL4TEdQfU230OO'
+m2 = hashlib.md5()
+
+
+############################################
+def translate_jp(sentence):
+    data = dict()
+    data['q'] = sentence
+    data['from'] = 'jp'
+    data['to'] = 'cn'
+    data['appid'] = '20190425000291634'
+    data['salt'] = str(random.randint(32768, 65536))
+
+    sign = data['appid'] + data['q'] + data['salt'] + key
+    final_sign = hashlib.md5(sign.encode("utf-8")).hexdigest()
+    data['sign'] = final_sign
+    #print(data['sign'])
+
+    url = 'http://api.fanyi.baidu.com/api/trans/vip/translate'
+    page_response = requests.get(url, params=data)
+    if page_response.status_code == 200:
+        try:
+            page_data = page_response.text
+            page_json = json.loads(page_data)
+
+        except Exception as e:
+            print('error occured', e, 'when getting this page', url)
+    else:
+        print('cannot get the page')
+        return
+    try:
+        if page_json['trans_result']:
+            translate_result = page_json['trans_result']
+            translate_text = translate_result[0]['dst']
+            return translate_text
+        else:
+            translate_text = '分からないです'
+            return translate_text
+
+    except Exception as e:
+        print('error',e)
+
+def translat_cn(sentence):
+    data = dict()
+    data['q'] = sentence
+    data['from'] = 'cn'
+    data['to'] = 'jp'
+    data['appid'] = '20190425000291634'
+    data['salt'] = str(random.randint(32768, 65536))
+
+    sign = data['appid'] + data['q'] + data['salt'] + key
+    final_sign = hashlib.md5(sign.encode("utf-8")).hexdigest()
+    data['sign'] = final_sign
+    #print(data['sign'])
+
+    url = 'http://api.fanyi.baidu.com/api/trans/vip/translate'
+    page_response = requests.get(url, params=data)
+    if page_response.status_code == 200:
+        try:
+            page_data = page_response.text
+            page_json = json.loads(page_data)
+
+        except Exception as e:
+            print('error occured', e, 'when getting this page', url)
+    else:
+        print('cannot get the page')
+        return
+    try:
+        if page_json['trans_result']:
+            translate_result = page_json['trans_result']
+            translate_text = translate_result[0]['dst']
+            return translate_text
+        else:
+            translate_text = '分からないです'
+            return translate_text
+
+    except Exception as e:
+        print('error',e)
+
+############################################
 def get_id_list_from(sentence):
     sentence_id_list = []
     seg_list = jieba.cut(sentence)
@@ -168,7 +260,7 @@ def run_model():
         sess.run(tf.global_variables_initializer())
 
         previous_losses = []
-        for step in range(20000):
+        for step in range(1000):
             sample_encoder_inputs, sample_decoder_inputs, sample_target_weights = get_samples(train_set, 1000)
             input_feed = {}
             for l in range(input_seq_len):
@@ -229,8 +321,72 @@ def predict():
             sys.stdout.flush()
             input_seq = sys.stdin.readline()
 
+def predict_with_string(string):
+    with tf.Session() as sess:
+
+        encoder_inputs, decoder_inputs, target_weights, outputs, loss, update, saver, \
+        learning_rate_decay_op, learning_rate= get_model(feed_previous=True)
+        # 从文件恢复模型
+        saver.restore(sess, './model/demo')
+
+        sys.stdout.write("> ")
+        sys.stdout.flush()
+        input_seq = string
+        if input_seq:
+            input_seq = string
+            input_id_list = get_id_list_from(input_seq)
+            if(len(input_id_list)):
+                sample_encoder_inputs, sample_decoder_inputs, sample_target_weights = seq_to_encoder(' '.join([str(v) for v in input_id_list]))
+
+                input_feed = {}
+                for l in range(input_seq_len):
+                    input_feed[encoder_inputs[l].name] = sample_encoder_inputs[l]
+                for l in range(output_seq_len):
+                    input_feed[decoder_inputs[l].name] = sample_decoder_inputs[l]
+                    input_feed[target_weights[l].name] = sample_target_weights[l]
+
+                input_feed[decoder_inputs[output_seq_len].name] = np.zeros([2], dtype=np.int32)
+
+                # 预测输出
+                outputs_seq = sess.run(outputs, input_feed)
+                # find max in num_decoder_symbols
+                outputs_seq = [int(np.argmax(logit[0], axis=0)) for logit in outputs_seq]
+                if EOS_ID in outputs_seq:
+                    outputs_seq = outputs_seq[:outputs_seq.index(EOS_ID)]
+                outputs_seq = [wordToken.id2word(v) for v in outputs_seq]
+                result = " ".join(outputs_seq)
+                if DEBUG:
+                    print(result)
+                return result
+
+            else:
+                print("我好像不太明白")
+
+
 if __name__ == "__main__":
-    #if sys.argv[1] == 'train':
-        #run_model()
-    #else:
-        predict()
+    if sys.argv[1] == 'train':
+        run_model()
+    else:
+        while True:
+            proxy = JuliusProxy.JuliusProxy()
+            list = "\n".join(proxy.getResult())
+            list2 = []
+
+            for result in proxy.parseResult():
+                word = result['WORD']
+
+                res = word[:-1]
+                list2.append(res.strip())
+            rec_sentence = ''.join(list2).strip('&lt;s&gt;')
+            if DEBUG:
+                print(rec_sentence)
+
+            cn_input = translate_jp(rec_sentence)
+
+            cn_output = predict_with_string(cn_input)
+
+            jp_output = translat_cn(cn_output)
+
+            print(jp_output)
+
+
