@@ -22,7 +22,7 @@ def translate(sentence):
     data = dict()
     data['q'] = sentence
     data['from'] = 'en'
-    data['to'] = 'jp'
+    data['to'] = 'zh'
     data['appid'] = '20190425000291634'
     data['salt'] = str(random.randint(32768, 65536))
 
@@ -71,7 +71,7 @@ def translate_by_line(file_name, output_file):
 
 if __name__ == "__main__":
     try:
-        #translate_by_line(output_question_file,jp_question_file)
-        translate_by_line(output_answer_file,jp_answer_file)
+        sentence = 'you ass'
+        print(translate(sentence))
     except Exception as e:
         print(e)
