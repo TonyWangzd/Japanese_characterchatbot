@@ -1,6 +1,10 @@
 import socket
 import re
+import os
+import binascii
 
+
+string = '\\'
 class JuliusProxy:
     """ JuliusProxy. Connects to julius and parses the recognition result."""
     def __init__(self, host="localhost", port=10500):
@@ -30,18 +34,12 @@ class JuliusProxy:
         # parse all WHYPO tags
         result = []
         for msg in [m for m in self.msg if "WHYPO" in m]:
-            result.append({})
 
-            for prop in self.pattern.findall(msg):
-                key = prop.split("=")[0]
-                value = prop.split('"')[1]
-
-                if key == "CM":
-                    value = float(value)
-                if key == "CLASSID":
-                    value = int(value)
-                result[-1][key] = value
-
+            list = self.pattern.findall(msg)
+            for prop in list:
+                if "WORD" in prop:
+                    value = prop.split('"')[1]
+                    result.append(value)
         return result
 
 if __name__ == "__main__":
@@ -50,11 +48,21 @@ if __name__ == "__main__":
         list = "\n".join(proxy.getResult())
         list2 = []
         print( "[")
-        for result in proxy.parseResult():
-            word = result['WORD']
-
-            res = word[:-1]
-            list2.append(res.strip())
+        result_list = proxy.parseResult()
+        for result in result_list:
+            if "\\x" in result:
+                hexstr = result.replace("\\x", "")
+                if len(hexstr) % 2 != 0:
+                    hexstr = hexstr[:-1]
+                    barr = binascii.unhexlify(hexstr)  # b'\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88'
+                    text = barr.decode("utf-8")
+                    res = text
+                    list2.append(res.strip())
+                else:
+                    barr = binascii.unhexlify(hexstr)  # b'\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88'
+                    text = barr.decode("utf-8")
+                    res = text
+                    list2.append(res.strip())
         print(''.join(list2).strip('&lt;s&gt;'))
         print("]")
 
