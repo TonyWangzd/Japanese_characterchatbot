@@ -7,6 +7,7 @@ from tensorflow.contrib.legacy_seq2seq.python.ops import seq2seq
 import jieba
 import random
 import JuliusProxy
+import binascii
 
 import requests
 import hashlib
@@ -56,7 +57,7 @@ def translate_jp(sentence):
     data = dict()
     data['q'] = sentence
     data['from'] = 'jp'
-    data['to'] = 'cn'
+    data['to'] = 'zh'
     data['appid'] = '20190425000291634'
     data['salt'] = str(random.randint(32768, 65536))
 
@@ -92,7 +93,7 @@ def translate_jp(sentence):
 def translat_cn(sentence):
     data = dict()
     data['q'] = sentence
-    data['from'] = 'cn'
+    data['from'] = 'zh'
     data['to'] = 'jp'
     data['appid'] = '20190425000291634'
     data['salt'] = str(random.randint(32768, 65536))
@@ -258,9 +259,10 @@ def run_model():
 
 
         sess.run(tf.global_variables_initializer())
+        writer = tf.summary.FileWriter("./tensorboard", sess.graph)
 
         previous_losses = []
-        for step in range(1000):
+        for step in range(8000):
             sample_encoder_inputs, sample_decoder_inputs, sample_target_weights = get_samples(train_set, 1000)
             input_feed = {}
             for l in range(input_seq_len):
@@ -275,7 +277,7 @@ def run_model():
             if len(previous_losses) > 5 and loss_ret > max(previous_losses[-5:]):
                 sess.run(learning_rate_decay_op)
             previous_losses.append(loss_ret)
-
+            writer.close()
             # 模型持久化
             saver.save(sess, './model/demo')
 
@@ -357,36 +359,50 @@ def predict_with_string(string):
                 result = " ".join(outputs_seq)
                 if DEBUG:
                     print(result)
-                return result
 
             else:
-                print("我好像不太明白")
+                result = "我好像不太明白"
+
+            return result
+
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'train':
-        run_model()
-    else:
-        while True:
+ #   if sys.argv[1] == 'train':
+  #          run_model()
+  #  else:
             proxy = JuliusProxy.JuliusProxy()
-            list = "\n".join(proxy.getResult())
-            list2 = []
+            while True:
+                list = "\n".join(proxy.getResult())
+                list2 = []
+                print("I said")
+                result_list = proxy.parseResult()
+                for result in result_list:
+                    if "\\x" in result:
+                        hexstr = result.replace("\\x", "")
+                        if len(hexstr) % 2 != 0:
+                            hexstr = hexstr[:-1]
+                            barr = binascii.unhexlify(hexstr)  # b'\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88'
+                            text = barr.decode("utf-8")
+                            res = text
+                            list2.append(res.strip())
+                        else:
+                            barr = binascii.unhexlify(hexstr)  # b'\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88'
+                            text = barr.decode("utf-8")
+                            res = text
+                            list2.append(res.strip())
+                rec_sentence = (''.join(list2).strip('&lt;s&gt;'))
 
-            for result in proxy.parseResult():
-                word = result['WORD']
+                if DEBUG:
+                    print(rec_sentence)
 
-                res = word[:-1]
-                list2.append(res.strip())
-            rec_sentence = ''.join(list2).strip('&lt;s&gt;')
-            if DEBUG:
-                print(rec_sentence)
+                if len(rec_sentence)>0:
 
-            cn_input = translate_jp(rec_sentence)
+                    cn_input = translate_jp(rec_sentence)
 
-            cn_output = predict_with_string(cn_input)
+                    cn_output = predict_with_string(cn_input)
 
-            jp_output = translat_cn(cn_output)
+                    jp_output = translat_cn(cn_output)
 
-            print(jp_output)
-
+                    print("robot said:",jp_output)
 
