@@ -33,7 +33,7 @@ def get_model():
     path = keras.utils.get_file(
         'nietzsche.txt',
         origin='https://s3.amazonaws.com/text-datasets/nietzsche.txt')
-    text = open(path).read().lower()
+    text = open(path,encoding='utf-8').read().lower()
     print('Corpus length', len(text))
 
     for i in range(0, len(text) - maxlen, step):
@@ -61,18 +61,18 @@ def get_model():
     model.add(layers.Dense(len(chars), activation='softmax'))
     model.summary()
 
-    optimizer = keras.optimizers.RMSprop(lr=0.01)
+    optimizer = keras.optimizers.RMSprop(lr=0.002)
     model.compile(loss='categorical_crossentropy', optimizer=optimizer)
 
     for epoch in range(1, 60):
         print('epoch', epoch)
         model.fit(x, y, batch_size=128,
-                  epochs=2)
+                  epochs=1)
         start_index = random.randint(0,len(text) - maxlen - 1)
         generated_text = text[start_index: start_index + maxlen]
         print('-----generating with seed: "'+ generated_text + '"')
 
-        for temprature in [0.2, 0.5, 1.0, 1.2]:
+        for temprature in [0.2, 0.5, 0.8, 1.2]:
             print('------temperature:', temprature)
             sys.stdout.write(generated_text)
 
@@ -93,8 +93,62 @@ def get_model():
                 sys.stdout.flush()
         print()
 
+    model.save('model.h5')
+
+
+
+def get_text():
+    path = keras.utils.get_file(
+        'nietzsche.txt',
+        origin='https://s3.amazonaws.com/text-datasets/nietzsche.txt')
+    text = open(path,encoding='utf-8').read().lower()
+    print('Corpus length', len(text))
+
+    for i in range(0, len(text) - maxlen, step):
+        sentences.append(text[i: i + maxlen])
+        next_chars.append(text[i + maxlen])
+    print('Number of sequences:', len(sentences))
+
+    # pd_sentences = pd.Series(sentences)
+
+    chars = sorted(list(set(text)))
+    print('Unique characters:', len(chars))
+    char_indices = dict((char, chars.index(char)) for char in chars)
+
+    return text, chars, char_indices
+
+
+def reload_generate():
+
+
+    text, chars, char_indices = get_text()
+
+    model = keras.models.load_model('model.h5')
+    temprature = 0.9
+    print('------temperature:', temprature)
+    start_index = random.randint(0, len(text) - maxlen - 1)
+    generated_text = text[start_index: start_index + maxlen]
+    print('-----generating with seed: "' + generated_text + '"')
+
+    for i in range(400):
+        sampled = np.zeros((1, maxlen, len(chars)))
+        for t, char in enumerate(generated_text):
+            sampled[0, t, char_indices[char]] = 1
+
+        preds = model.predict(sampled, verbose=0)[0]
+        next_index = sample(preds, temprature)
+        next_char = chars[next_index]
+
+        generated_text += next_char
+        generated_text = generated_text[1:]
+
+        sys.stdout.write(next_char)
+        sys.stdout.flush()
+
+
 if __name__ == "__main__":
     get_model()
+    # reload_generate()
 
 
 
