@@ -24,7 +24,7 @@ batch_size = 30
 
 pred_period = 1
 
-pred_len = 30
+pred_len = 100
 
 para_file = 'params_rnn.params'
 
@@ -170,7 +170,7 @@ def generate_with_check(corpus_words, num_chars, char_to_idx, idx_to_char, vocab
                 not_ingram = True
                 while not_ingram:
                     i = 0
-                    output_number = sample(Y[0], 0.1)
+                    output_number = sample(Y[0], 0.3)
                     check_gram = idx_to_char[output[-1]]+' '+idx_to_char[output_number]
 
                     for element in word2gram_dic:
@@ -178,10 +178,13 @@ def generate_with_check(corpus_words, num_chars, char_to_idx, idx_to_char, vocab
                             not_ingram = False
                             break
 
+                    # 设置遍历次数flag，不会超过5
+                    i += 1
+
                     if not not_ingram or i > 5:
                         output.append(output_number)
-                    else:
-                        i += 1
+                        #print(idx_to_char[output_number]+' ')
+                        break
 
         return ' '.join([idx_to_char[i] for i in output])
 
@@ -269,25 +272,61 @@ if __name__ == "__main__":
 
     text = open(file, encoding='utf=8').read()
 
-    index_to_word, word_to_index, corpus_indices, vocabulary_size = process_corpus(text)
+    option = input('choose the mode train/display\n')
 
-    corpus_bind = [index_to_word, word_to_index, corpus_indices, vocabulary_size]
+    if option == 'train':
 
-    joblib.dump(corpus_bind, 'corpus_bind.pkl')
+        index_to_word, word_to_index, corpus_indices, vocabulary_size = process_corpus(text)
 
-    print('successfully save the language model\n')
+        corpus_bind = [index_to_word, word_to_index, corpus_indices, vocabulary_size]
 
-    num_inputs, num_hiddens, num_outputs = vocabulary_size, 256, vocabulary_size
-    # parameter for three layers
-    params = get_params()
-    prefixes = [['who', 'is'],['I','am']]
-    #result = predict_rnn(prefix, 10, rnn, params, num_hiddens, vocabulary_size, index_to_word, word_to_index)
-    #print(result)
-    train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
-                          vocabulary_size, ctx, corpus_indices, index_to_word,
-                              word_to_index, num_epochs, num_steps, lr,
-                          clipping_theta, batch_size, pred_period, pred_len,
-                          prefixes)
+        joblib.dump(corpus_bind, 'corpus_bind.pkl')
+
+        print('successfully save the language model\n')
+
+        num_inputs, num_hiddens, num_outputs = vocabulary_size, 256, vocabulary_size
+        # parameter for three layers
+        params = get_params()
+        prefixes = [['who', 'is'], ['I', 'am']]
+        #result = predict_rnn(prefix, 10, rnn, params, num_hiddens, vocabulary_size, index_to_word, word_to_index)
+        #print(result)
+        train_and_predict_rnn(rnn, get_params, init_rnn_state, num_hiddens,
+                              vocabulary_size, ctx, corpus_indices, index_to_word,
+                                  word_to_index, num_epochs, num_steps, lr,
+                              clipping_theta, batch_size, pred_period, pred_len,
+                              prefixes)
+
+    if option == 'display':
+
+        corpus_chars = text.replace('\n', ' ').replace('\r', ' ')
+        corpus_words = nltk.word_tokenize(corpus_chars)
+        corpus_bind = joblib.load('corpus_bind.pkl')
+
+        index_to_word = corpus_bind[0]
+        word_to_index = corpus_bind[1]
+        corpus_indices = corpus_bind[2]
+        vocabulary_size = corpus_bind[3]
+
+        num_inputs, num_hiddens, num_outputs = vocabulary_size, 256, vocabulary_size
+
+        print('successfully load the language model\n')
+
+        params = nd.load(para_file)
+
+        print('successfully load the params for rnn\n')
+
+        while True:
+            text = generate_with_check(corpus_words, pred_len, word_to_index, index_to_word, vocabulary_size)
+            print('generate text below:\n'+text+'\n')
+
+
+
+
+
+
+
+
+
 
 
 
